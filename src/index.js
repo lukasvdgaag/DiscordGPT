@@ -7,6 +7,7 @@ const {
     ContextMenuCommandBuilder,
     ApplicationCommandType
 } = require('discord.js');
+const {encode, decode} = require('gpt-3-encoder');
 const GptMessenger = require("./GptMessenger");
 require('dotenv').config();
 
@@ -45,6 +46,8 @@ client.on('interactionCreate', async interaction => {
     }
 
     await interaction.deferReply();
+
+    if (message != null) message = limitMessageTokens(message);
 
     let response = message == null ? null : await messenger.measureAggressiveness(message);
     if (response == null) {
@@ -93,6 +96,15 @@ function createCommands() {
 
     client.application.commands.set(commands)
         .catch(console.error);
+}
+
+function limitMessageTokens(message, maxTokens = 750) {
+    const encoded = encode(message);
+
+    if (encoded.length <= maxTokens) return message;
+
+    encoded.length = maxTokens;
+    return decode(encoded);
 }
 
 function getOriginalMessage(message) {

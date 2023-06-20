@@ -19,6 +19,7 @@ class GptMessenger {
                 'https://api.openai.com/v1/chat/completions',
                 {
                     model: 'gpt-3.5-turbo',
+                    max_tokens: 125,
                     messages: messages.messages,
                 },
                 {
