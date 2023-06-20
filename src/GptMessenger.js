@@ -1,6 +1,7 @@
 const axios = require('axios');
 const GptMessages = require("./GptMessages");
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({path: __dirname.replace('\\src', '') + "/.env"});
 
 class GptMessenger {
 

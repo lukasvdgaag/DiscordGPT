@@ -10,7 +10,8 @@ const {
 const {encode, decode} = require('gpt-3-encoder');
 const GptMessenger = require("./GptMessenger");
 const CooldownManager = require("./CooldownManager");
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({path: __dirname.replace('\\src', '') + "/.env"});
 
 const messenger = new GptMessenger();
 const cooldownManager = new CooldownManager();
