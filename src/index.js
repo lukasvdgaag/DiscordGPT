@@ -9,9 +9,11 @@ const {
 } = require('discord.js');
 const {encode, decode} = require('gpt-3-encoder');
 const GptMessenger = require("./GptMessenger");
+const CooldownManager = require("./CooldownManager");
 require('dotenv').config();
 
 const messenger = new GptMessenger();
+const cooldownManager = new CooldownManager();
 
 const client = new Client({
     intents: [
@@ -26,6 +28,8 @@ const client = new Client({
 client.on('ready', () => {
     console.log(`Bot is ready. Logged in as ${client.user.tag}`);
     createCommands();
+
+    setTimeout(cooldownManager.flushExpiredCooldowns, 1000 * 60 * 5); // 5 minutes
 });
 
 client.on('interactionCreate', async interaction => {
@@ -45,9 +49,17 @@ client.on('interactionCreate', async interaction => {
         message = options.getString('message');
     }
 
-    await interaction.deferReply();
-
     if (message != null) message = limitMessageTokens(message);
+
+    const cooldown = cooldownManager.getCooldown(interactionUserId, "aggression");
+    if (cooldown > 0) {
+        await interaction.deferReply({ephemeral: true});
+        await interaction.editReply(`Please don't spam the command. You must wait another ${cooldownManager.getCooldownDisplayName(cooldown)} to use the command again.`);
+        return;
+    } else {
+        cooldownManager.setCooldown(interactionUserId, "aggression");
+        await interaction.deferReply();
+    }
 
     let response = message == null ? null : await messenger.measureAggressiveness(message);
     if (response == null) {
