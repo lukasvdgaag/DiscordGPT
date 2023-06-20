@@ -1,4 +1,12 @@
-const {Client, Events, GatewayIntentBits, SlashCommandBuilder, SlashCommandStringOption, EmbedBuilder} = require('discord.js');
+const {
+    Client,
+    GatewayIntentBits,
+    SlashCommandBuilder,
+    SlashCommandStringOption,
+    EmbedBuilder,
+    ContextMenuCommandBuilder,
+    ApplicationCommandType
+} = require('discord.js');
 const GptMessenger = require("./GptMessenger");
 require('dotenv').config();
 
@@ -20,46 +28,50 @@ client.on('ready', () => {
 });
 
 client.on('interactionCreate', async interaction => {
-    if (!interaction.isCommand()) return;
+    if (!interaction.isCommand() && !interaction.isMessageContextMenuCommand()) return;
 
     const {commandName, options} = interaction;
 
-    if (commandName === 'aggressiveness') {
-        const message = options.getString('message');
+    let messageUserId = interaction.user.id;
+    let interactionUserId = interaction.user.id;
+    let message = null;
 
-        await interaction.deferReply();
+    if (interaction.isMessageContextMenuCommand() && commandName === 'Check Aggression') {
+        message = interaction.targetMessage.content;
+        interactionUserId = interaction.user.id;
+        messageUserId = interaction.targetMessage.author.id;
+    } else if (interaction.isCommand() && commandName === 'aggressiveness') {
+        message = options.getString('message');
+    }
 
-        let response = await messenger.measureAggressiveness(message);
-        if (response == null) {
-            await interaction.editReply("I couldn't connect to the OpenAI API, sorry.");
+    await interaction.deferReply();
+
+    let response = message == null ? null : await messenger.measureAggressiveness(message);
+    if (response == null) {
+        await interaction.editReply("I couldn't connect to the OpenAI API, sorry.");
+        return;
+    }
+
+    try {
+        response = JSON.parse(response);
+        if (!response?.rating || !response?.explanation) {
+            await interaction.editReply("I couldn't understand ChatGPT's response. Please try again.");
             return;
         }
 
-        try {
-            response = JSON.parse(response);
-            if (!response?.rating || !response?.explanation) {
-                await interaction.editReply("I couldn't understand ChatGPT's response. Please try again.");
-                return;
-            }
+        const embed = new EmbedBuilder()
+            .setTitle('Aggressiveness Analysis')
+            .setDescription(`An analysis of the aggressiveness of the message that was submitted by <@${interactionUserId}>${interactionUserId !== messageUserId ? ` about <@${messageUserId}>'s message` : ''}.`)
+            .setColor(generateColor(response.rating))
+            .addFields(
+                {name: 'Score', value: `${parseFloat(response.rating).toFixed(1)}`},
+                {name: 'Message', value: getOriginalMessage(message)},
+                {name: 'Explanation', value: response.explanation}
+            );
 
-            console.log('Rating:', response.rating);
-            console.log('Explanation:', response.explanation);
-
-            const embed = new EmbedBuilder()
-                .setTitle('Aggressiveness Analysis')
-                .setDescription(`An analysis of the aggressiveness of the message that was submitted by <@${interaction.user.id}>.`)
-                .setColor(generateColor(response.rating))
-                .addFields(
-                    {name: 'Score', value: `${parseFloat(response.rating).toFixed(1)}`},
-                    {name: 'Message', value: getOriginalMessage(message)},
-                    {name: 'Explanation', value: response.explanation}
-                );
-
-            await interaction.editReply({embeds: [embed]});
-        } catch (e) {
-            console.log(e)
-            await interaction.editReply(`I did not receive a valid response from ChatGPT. Here is the response I received: \`\`\`\n${response}\n\`\`\``);
-        }
+        await interaction.editReply({embeds: [embed]});
+    } catch (e) {
+        await interaction.editReply(`I did not receive a valid response from ChatGPT. Here is the response I received: \`\`\`\n${response}\n\`\`\``);
     }
 });
 
@@ -73,7 +85,10 @@ function createCommands() {
                     .setName('message')
                     .setDescription('The message to analyze')
                     .setRequired(true)
-            )
+            ),
+        new ContextMenuCommandBuilder()
+            .setName('Check Aggression')
+            .setType(ApplicationCommandType.Message)
     ];
 
     client.application.commands.set(commands)
